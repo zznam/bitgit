@@ -8,6 +8,7 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { BulkResultPanel } from './git/BulkResultPanel';
 import { LabelFilter } from './LabelFilter';
 import { labelCatalog, sameLabel } from '../lib/labels';
+import { DEFAULT_BOARD_VIEW, isDefaultBoardView, loadBoardView, saveBoardView } from '../lib/boardView';
 import { useAutomationProblems } from '../lib/recovery-automation';
 import { attentionRank } from './git/gitStatusView';
 import { SavedViews } from './SavedViews';
@@ -43,11 +44,25 @@ export function Dashboard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [showArchived, setShowArchived] = useState(false);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<SortOrder>('favorite');
+  // Filters and sort are restored from the last session; see lib/boardView.
+  const [savedView] = useState(loadBoardView);
+  const [statusFilter, setStatusFilter] = useState<string>(savedView.statusFilter);
+  const [showArchived, setShowArchived] = useState(savedView.showArchived);
+  const [favoritesOnly, setFavoritesOnly] = useState(savedView.favoritesOnly);
+  const [selectedLabels, setSelectedLabels] = useState<string[]>(savedView.selectedLabels);
+  const [sortBy, setSortBy] = useState<SortOrder>(savedView.sortBy);
+  const boardView = { statusFilter, showArchived, favoritesOnly, selectedLabels, sortBy };
+  useEffect(() => {
+    saveBoardView({ statusFilter, showArchived, favoritesOnly, selectedLabels, sortBy });
+  }, [statusFilter, showArchived, favoritesOnly, selectedLabels, sortBy]);
+  const resetBoardView = () => {
+    setSearchQuery('');
+    setStatusFilter(DEFAULT_BOARD_VIEW.statusFilter);
+    setShowArchived(DEFAULT_BOARD_VIEW.showArchived);
+    setFavoritesOnly(DEFAULT_BOARD_VIEW.favoritesOnly);
+    setSelectedLabels([]);
+    setSortBy(DEFAULT_BOARD_VIEW.sortBy);
+  };
   const [currentView, setCurrentView] = useState<'projects' | 'analytics'>('projects');
 
   // Check actual dark mode state from document class, not just settings
@@ -60,14 +75,16 @@ export function Dashboard() {
   const catalogNames = catalog.map((item) => item.name);
   const catalogKey = catalogNames.join('\n').toLowerCase();
 
-  // A label removed from its last project leaves the catalog, so it must leave the filter too.
+  // Wait for the project catalog before clearing labels restored from the previous session.
+  const hasProjects = projects.length > 0;
   useEffect(() => {
+    if (!hasProjects || isLoading) return;
     const inUse = new Set(catalogKey ? catalogKey.split('\n') : []);
     setSelectedLabels((current) => {
       const next = current.filter((label) => inUse.has(label.toLowerCase()));
       return next.length === current.length ? current : next;
     });
-  }, [catalogKey]);
+  }, [catalogKey, hasProjects, isLoading]);
 
   const filters: BoardFilters = {
     search: searchQuery,
@@ -482,6 +499,15 @@ export function Dashboard() {
               <option value="name">Sort: Name (A-Z)</option>
             </select>
 
+            {(!isDefaultBoardView(boardView) || searchQuery) && (
+              <button
+                onClick={resetBoardView}
+                className="px-3 py-2 text-sm font-medium text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-lg transition-colors"
+                title="Clear the search and restore the default filters and sort"
+              >
+                Reset view
+              </button>
+            )}
             <SavedViews current={filters} onApply={applyView} />
           </div>
         </div>
@@ -505,15 +531,10 @@ export function Dashboard() {
                 No Projects Found
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                No projects match your search or filter criteria. Try adjusting your filters.
+                No projects match your search or filters. Filters and sort are remembered between sessions, so a filter from last time may be hiding them.
               </p>
               <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('all');
-                  setSelectedLabels([]);
-                  setFavoritesOnly(false);
-                }}
+                onClick={resetBoardView}
                 className="px-6 py-3 text-white bg-teal-600 dark:bg-teal-700 rounded-lg hover:bg-teal-700 dark:hover:bg-teal-800 transition-colors"
               >
                 Clear Filters

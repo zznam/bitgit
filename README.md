@@ -74,6 +74,8 @@ untouched while you do. GitHub is optional, and so is Git: a plain folder works.
   add) or Settings.
 - **Labels** to group projects: add up to eight per project, then filter or search the board by them
   or by favorites. Sort by what needs attention, and save a set of filters as a named view.
+- **Remembered board view**. The app restores the last filters and sort order when you reopen it.
+  **Reset view** returns to the defaults.
 - **Analytics** with commit history, an activity heatmap and repository health.
 - **Open in your editor** (VS Code, Cursor, Sublime Text or a custom command) **or a terminal** in
   the project folder.
