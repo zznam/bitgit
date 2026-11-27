@@ -8,6 +8,7 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { BulkResultPanel } from './git/BulkResultPanel';
 import { LabelFilter } from './LabelFilter';
 import { labelCatalog, sameLabel } from '../lib/labels';
+import { DEFAULT_BOARD_VIEW, isDefaultBoardView, loadBoardView, saveBoardView, type BoardSort } from '../lib/boardView';
 import type { BulkProjectResult, PublishAction } from '../types';
 import { Plus, RefreshCw, Settings, Sun, Moon, CheckSquare, Square, Upload, Search, Filter, BarChart3, FolderGit2 } from 'lucide-react';
 
@@ -39,11 +40,24 @@ export function Dashboard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [showArchived, setShowArchived] = useState(false);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<'name' | 'favorite' | 'activity'>('favorite');
+  // Filters and sort are restored from the last session; see lib/boardView.
+  const [savedView] = useState(loadBoardView);
+  const [statusFilter, setStatusFilter] = useState<string>(savedView.statusFilter);
+  const [showArchived, setShowArchived] = useState(savedView.showArchived);
+  const [favoritesOnly, setFavoritesOnly] = useState(savedView.favoritesOnly);
+  const [selectedLabels, setSelectedLabels] = useState<string[]>(savedView.selectedLabels);
+  const [sortBy, setSortBy] = useState<BoardSort>(savedView.sortBy);
+  const boardView = { statusFilter, showArchived, favoritesOnly, selectedLabels, sortBy };
+  const boardViewKey = JSON.stringify(boardView);
+  useEffect(() => saveBoardView(JSON.parse(boardViewKey)), [boardViewKey]);
+  const resetBoardView = () => {
+    setSearchQuery('');
+    setStatusFilter(DEFAULT_BOARD_VIEW.statusFilter);
+    setShowArchived(DEFAULT_BOARD_VIEW.showArchived);
+    setFavoritesOnly(DEFAULT_BOARD_VIEW.favoritesOnly);
+    setSelectedLabels([]);
+    setSortBy(DEFAULT_BOARD_VIEW.sortBy);
+  };
   const [currentView, setCurrentView] = useState<'projects' | 'analytics'>('projects');
 
   // Check actual dark mode state from document class, not just settings
@@ -439,13 +453,23 @@ export function Dashboard() {
             {/* Sort dropdown */}
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'name' | 'favorite' | 'activity')}
+              onChange={(e) => setSortBy(e.target.value as BoardSort)}
               className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 min-w-[180px]"
             >
               <option value="favorite">Sort: Favorites First</option>
               <option value="activity">Sort: Recent Activity</option>
               <option value="name">Sort: Name (A-Z)</option>
             </select>
+
+            {(!isDefaultBoardView(boardView) || searchQuery) && (
+              <button
+                onClick={resetBoardView}
+                className="px-3 py-2 text-sm font-medium text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-lg transition-colors"
+                title="Clear the search and restore the default filters and sort"
+              >
+                Reset view
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -526,14 +550,10 @@ export function Dashboard() {
                 No Projects Found
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                No projects match your search or filter criteria. Try adjusting your filters.
+                No projects match your search or filters. Filters and sort are remembered between sessions, so a filter from last time may be hiding them.
               </p>
               <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('all');
-                  setSelectedLabels([]);
-                }}
+                onClick={resetBoardView}
                 className="px-6 py-3 text-white bg-teal-600 dark:bg-teal-700 rounded-lg hover:bg-teal-700 dark:hover:bg-teal-800 transition-colors"
               >
                 Clear Filters
