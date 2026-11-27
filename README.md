@@ -73,6 +73,8 @@ untouched while you do. GitHub is optional, and so is Git: a plain folder works.
 - **Bulk import** by scanning a folder for existing repositories, from Add Project (pick which to
   add) or Settings.
 - **Labels** to group projects: add up to eight per project, then filter or search the board by them.
+- **Remembered board view**: status, label, favorites and archived filters and the sort order are
+  restored when you reopen the app. **Reset view** returns to the defaults.
 - **Analytics** with commit history, an activity heatmap and repository health.
 - **Open in your editor** (VS Code, Cursor, Sublime Text or a custom command) **or a terminal** in
   the project folder.
