@@ -8,7 +8,11 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { BulkResultPanel } from './git/BulkResultPanel';
 import { LabelFilter } from './LabelFilter';
 import { labelCatalog, sameLabel } from '../lib/labels';
-import { DEFAULT_BOARD_VIEW, isDefaultBoardView, loadBoardView, saveBoardView, type BoardSort } from '../lib/boardView';
+import { DEFAULT_BOARD_VIEW, isDefaultBoardView, loadBoardView, saveBoardView } from '../lib/boardView';
+import { useAutomationProblems } from '../lib/recovery-automation';
+import { attentionRank } from './git/gitStatusView';
+import { SavedViews } from './SavedViews';
+import type { BoardFilters, SavedView, SortOrder } from '../lib/boardViews';
 import type { BulkProjectResult, PublishAction } from '../types';
 import { Plus, RefreshCw, Settings, Sun, Moon, CheckSquare, Square, Upload, Search, Filter, BarChart3, FolderGit2 } from 'lucide-react';
 
@@ -46,10 +50,11 @@ export function Dashboard() {
   const [showArchived, setShowArchived] = useState(savedView.showArchived);
   const [favoritesOnly, setFavoritesOnly] = useState(savedView.favoritesOnly);
   const [selectedLabels, setSelectedLabels] = useState<string[]>(savedView.selectedLabels);
-  const [sortBy, setSortBy] = useState<BoardSort>(savedView.sortBy);
+  const [sortBy, setSortBy] = useState<SortOrder>(savedView.sortBy);
   const boardView = { statusFilter, showArchived, favoritesOnly, selectedLabels, sortBy };
-  const boardViewKey = JSON.stringify(boardView);
-  useEffect(() => saveBoardView(JSON.parse(boardViewKey)), [boardViewKey]);
+  useEffect(() => {
+    saveBoardView({ statusFilter, showArchived, favoritesOnly, selectedLabels, sortBy });
+  }, [statusFilter, showArchived, favoritesOnly, selectedLabels, sortBy]);
   const resetBoardView = () => {
     setSearchQuery('');
     setStatusFilter(DEFAULT_BOARD_VIEW.statusFilter);
@@ -70,17 +75,37 @@ export function Dashboard() {
   const catalogNames = catalog.map((item) => item.name);
   const catalogKey = catalogNames.join('\n').toLowerCase();
 
-  // A label removed from its last project leaves the catalog, so it must leave the filter too.
+  // Wait for the project catalog before clearing labels restored from the previous session.
+  const hasProjects = projects.length > 0;
   useEffect(() => {
+    if (!hasProjects || isLoading) return;
     const inUse = new Set(catalogKey ? catalogKey.split('\n') : []);
     setSelectedLabels((current) => {
       const next = current.filter((label) => inUse.has(label.toLowerCase()));
       return next.length === current.length ? current : next;
     });
-  }, [catalogKey]);
+  }, [catalogKey, hasProjects, isLoading]);
+
+  const filters: BoardFilters = {
+    search: searchQuery,
+    status: statusFilter,
+    labels: selectedLabels,
+    favoritesOnly,
+    showArchived,
+    sort: sortBy,
+  };
+  const applyView = (view: SavedView) => {
+    setSearchQuery(view.search);
+    setStatusFilter(view.status);
+    setSelectedLabels([...view.labels]);
+    setFavoritesOnly(view.favoritesOnly);
+    setShowArchived(view.showArchived);
+    setSortBy(view.sort);
+  };
 
   // Filter and sort projects
   const query = searchQuery.toLowerCase();
+  const now = Date.now();
   const filteredProjects = projects
     .filter((project) => {
       // Search filter
@@ -106,6 +131,11 @@ export function Dashboard() {
       return matchesSearch && matchesLabels && matchesStatus && matchesArchive && matchesFavorites;
     })
     .sort((a, b) => {
+      if (sortBy === 'attention') {
+        const order = attentionRank(a, now) - attentionRank(b, now);
+        if (order !== 0) return order;
+      }
+
       // Sort by favorites first if enabled
       if (sortBy === 'favorite') {
         const aFav = a.favorite ? 1 : 0;
@@ -256,6 +286,20 @@ export function Dashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleRefreshAll, hasSelection, selectShown, clearSelection, toggleTheme, currentView]);
 
+  // The dock rises above the automatic-save problem summary, which sits at the bottom left.
+  const automationNeedsAttention = useAutomationProblems().length > 0;
+  const dockOffsetPx = automationNeedsAttention ? 64 : 16;
+  const showDock = currentView === 'projects' && (hasSelection || bulk !== null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [dockHeight, setDockHeight] = useState(0);
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!showDock || !dock) return;
+    const observer = new ResizeObserver(() => setDockHeight(dock.offsetHeight));
+    observer.observe(dock);
+    return () => observer.disconnect();
+  }, [showDock]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -312,7 +356,7 @@ export function Dashboard() {
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">BitGit</h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {currentView === 'projects'
-                    ? `${filteredProjects.length} of ${projects.length} projects${selectedProjectIds.size > 0 ? ` • ${selectedProjectIds.size} selected` : ''}`
+                    ? `${filteredProjects.length} of ${projects.length} projects`
                     : 'Insights & Analytics'
                   }
                 </p>
@@ -389,9 +433,9 @@ export function Dashboard() {
       {currentView === 'projects' && (
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-16 z-10">
         <div className="container mx-auto px-8 py-4">
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             {/* Search Box */}
-            <div className="flex-1 relative">
+            <div className="flex-1 min-w-[12rem] relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
@@ -422,20 +466,13 @@ export function Dashboard() {
               </select>
             </div>
 
-            {/* Favorites Filter */}
-            <button
-              onClick={() => setFavoritesOnly(!favoritesOnly)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                favoritesOnly
-                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border-2 border-yellow-400 dark:border-yellow-600'
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-              }`}
-              title="Show only favorites"
-            >
-              ⭐ {favoritesOnly ? 'Favorites Only' : 'All'}
-            </button>
-
-            <LabelFilter options={catalog} selected={selectedLabels} onChange={setSelectedLabels} />
+            <LabelFilter
+              options={catalog}
+              selected={selectedLabels}
+              onChange={setSelectedLabels}
+              favoritesOnly={favoritesOnly}
+              onFavoritesOnlyChange={setFavoritesOnly}
+            />
 
             {/* Archived Filter */}
             <button
@@ -453,10 +490,11 @@ export function Dashboard() {
             {/* Sort dropdown */}
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as BoardSort)}
+              onChange={(e) => setSortBy(e.target.value as SortOrder)}
               className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 min-w-[180px]"
             >
               <option value="favorite">Sort: Favorites First</option>
+              <option value="attention">Sort: Needs Attention</option>
               <option value="activity">Sort: Recent Activity</option>
               <option value="name">Sort: Name (A-Z)</option>
             </select>
@@ -470,73 +508,16 @@ export function Dashboard() {
                 Reset view
               </button>
             )}
+            <SavedViews current={filters} onApply={applyView} />
           </div>
         </div>
       </div>
       )}
 
-      {/* Batch Operations Toolbar - Only show for projects view */}
-      {currentView === 'projects' && hasSelection && (
-        <div className="bg-teal-50 dark:bg-teal-900/20 border-b border-teal-200 dark:border-teal-800 sticky top-[136px] z-10">
-          <div className="container mx-auto px-8 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <span className="text-sm font-medium text-teal-900 dark:text-teal-100">
-                  {selectedProjectIds.size} project{selectedProjectIds.size !== 1 ? 's' : ''} selected
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={selectShown}
-                    className="text-sm px-3 py-1.5 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 rounded transition-colors"
-                    title={`Select the projects shown (${MOD}A)`}
-                  >
-                    <CheckSquare className="w-4 h-4 inline mr-1" />
-                    Select All
-                  </button>
-                  <button
-                    onClick={clearSelection}
-                    className="text-sm px-3 py-1.5 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40 rounded transition-colors"
-                    title="Clear selection (Esc)"
-                  >
-                    <Square className="w-4 h-4 inline mr-1" />
-                    Clear
-                  </button>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => void handleBulk('push_local')}
-                  disabled={isBulkRunning}
-                  className="flex items-center gap-2 px-4 py-2 text-white bg-teal-600 dark:bg-teal-700 rounded-lg hover:bg-teal-700 dark:hover:bg-teal-800 transition-colors disabled:opacity-50"
-                  title="Push commits you already made to each project's Git remote. Projects with uncommitted changes are held back for you to review."
-                >
-                  <Upload className="w-4 h-4" />
-                  Bulk Push Commits
-                </button>
-                <button
-                  onClick={() => void handleBulk('full_sync')}
-                  disabled={isBulkRunning}
-                  className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 dark:bg-blue-700 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors disabled:opacity-50"
-                  title="Sync each project's current branch with its Git remote. Projects with uncommitted changes are held back for you to review."
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Bulk Sync Branches
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <main className="container mx-auto px-8 py-8">
-        {currentView === 'projects' && bulk && (
-          <BulkResultPanel
-            title={bulk.kind === 'full_sync' ? 'Bulk sync results' : 'Bulk push results'}
-            results={bulk.results}
-            onReview={handleReview}
-            onDismiss={() => setBulk(null)}
-          />
-        )}
+      <main
+        className="container mx-auto px-8 py-8"
+        style={showDock ? { paddingBottom: dockHeight + dockOffsetPx + 24 } : undefined}
+      >
         {/* Conditionally render Analytics Dashboard or Projects List */}
         {currentView === 'analytics' ? (
           <AnalyticsDashboard />
@@ -568,6 +549,71 @@ export function Dashboard() {
           </div>
         )}
       </main>
+
+      {/* Selection and batch results float over the board, so selecting never moves the cards */}
+      {showDock && (
+        <div ref={dockRef} className="fixed inset-x-0 z-30 pointer-events-none" style={{ bottom: dockOffsetPx }}>
+          <div className="container mx-auto px-8 flex flex-col items-center gap-3">
+            {bulk && (
+              <div className="pointer-events-auto w-full max-w-3xl max-h-[40vh] overflow-y-auto rounded-lg shadow-xl">
+                <BulkResultPanel
+                  title={bulk.kind === 'full_sync' ? 'Bulk sync results' : 'Bulk push results'}
+                  results={bulk.results}
+                  onReview={handleReview}
+                  onDismiss={() => setBulk(null)}
+                />
+              </div>
+            )}
+            {hasSelection && (
+              <div
+                role="toolbar"
+                aria-label="Selected projects"
+                data-testid="selection-bar"
+                className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-2 pl-5 pr-2 shadow-xl"
+              >
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {selectedProjectIds.size} selected
+                </span>
+                <button
+                  onClick={selectShown}
+                  className="flex items-center gap-1 text-sm px-3 py-1.5 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/40 rounded-full transition-colors"
+                  title={`Select the projects shown (${MOD}A)`}
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Select All
+                </button>
+                <button
+                  onClick={clearSelection}
+                  className="flex items-center gap-1 text-sm px-3 py-1.5 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/40 rounded-full transition-colors"
+                  title="Clear selection (Esc)"
+                >
+                  <Square className="w-4 h-4" />
+                  Clear
+                </button>
+                <span className="mx-1 h-6 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
+                <button
+                  onClick={() => void handleBulk('push_local')}
+                  disabled={isBulkRunning}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-teal-600 dark:bg-teal-700 rounded-full hover:bg-teal-700 dark:hover:bg-teal-800 transition-colors disabled:opacity-50"
+                  title="Push commits you already made to each project's Git remote. Projects with uncommitted changes are held back for you to review."
+                >
+                  <Upload className="w-4 h-4" />
+                  Push Commits
+                </button>
+                <button
+                  onClick={() => void handleBulk('full_sync')}
+                  disabled={isBulkRunning}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-blue-600 dark:bg-blue-700 rounded-full hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors disabled:opacity-50"
+                  title="Sync each project's current branch with its Git remote. Projects with uncommitted changes are held back for you to review."
+                >
+                  <RefreshCw className={`w-4 h-4 ${isBulkRunning ? 'animate-spin' : ''}`} />
+                  Sync Branches
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <SettingsModal
         isOpen={isSettingsOpen}

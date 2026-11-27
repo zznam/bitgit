@@ -1,13 +1,13 @@
 // The board's filters and sort survive restarts. The search box does not: a stale query that
 // hides projects is more confusing than retyping one.
-export type BoardSort = 'name' | 'favorite' | 'activity';
+import { SORT_ORDERS, type SortOrder } from './boardViews';
 
 export interface BoardView {
   statusFilter: string;
   showArchived: boolean;
   favoritesOnly: boolean;
   selectedLabels: string[];
-  sortBy: BoardSort;
+  sortBy: SortOrder;
 }
 
 export const DEFAULT_BOARD_VIEW: BoardView = {
@@ -30,7 +30,6 @@ export const BOARD_STATUSES = [
   'not_configured',
 ] as const;
 
-const SORTS: readonly BoardSort[] = ['name', 'favorite', 'activity'];
 const STORAGE_KEY = 'bitgit.boardView.v1';
 const MAX_SAVED_LABELS = 50;
 
@@ -61,7 +60,7 @@ export function parseBoardView(raw: string | null): BoardView {
     showArchived: data.showArchived === true,
     favoritesOnly: data.favoritesOnly === true,
     selectedLabels: firstSpellings(labels).slice(0, MAX_SAVED_LABELS),
-    sortBy: SORTS.includes(data.sortBy as BoardSort) ? (data.sortBy as BoardSort) : DEFAULT_BOARD_VIEW.sortBy,
+    sortBy: SORT_ORDERS.includes(data.sortBy as SortOrder) ? (data.sortBy as SortOrder) : DEFAULT_BOARD_VIEW.sortBy,
   };
 }
 

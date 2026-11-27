@@ -18,7 +18,7 @@ with a visual Git dashboard for the projects you publish.
 [Website](https://seveneves.ai/bitgit/) ·
 [Documentation](#documentation) ·
 [For AI agents](#for-ai-agents) ·
-[Report a bug](https://github.com/sevenevesai/bitgit/issues/new)
+[Report a bug](https://github.com/sevenevesai/bitgit/issues/new) · [Discord](https://seveneves.ai/discord/?from=bitgit-readme)
 
 </div>
 
@@ -72,9 +72,10 @@ untouched while you do. GitHub is optional, and so is Git: a plain folder works.
 - **GitHub integration** to create, clone and link repositories.
 - **Bulk import** by scanning a folder for existing repositories, from Add Project (pick which to
   add) or Settings.
-- **Labels** to group projects: add up to eight per project, then filter or search the board by them.
-- **Remembered board view**: status, label, favorites and archived filters and the sort order are
-  restored when you reopen the app. **Reset view** returns to the defaults.
+- **Labels** to group projects: add up to eight per project, then filter or search the board by them
+  or by favorites. Sort by what needs attention, and save a set of filters as a named view.
+- **Remembered board view**. The app restores the last filters and sort order when you reopen it.
+  **Reset view** returns to the defaults.
 - **Analytics** with commit history, an activity heatmap and repository health.
 - **Open in your editor** (VS Code, Cursor, Sublime Text or a custom command) **or a terminal** in
   the project folder.
@@ -225,7 +226,6 @@ Design details: [recovery design](docs/RECOVERY_DESIGN.md),
 - Secret screening is heuristic, not a guarantee.
 - Linux ships only as an AppImage: the `.deb` and `.rpm` need webkit2gtk 4.0, which current
   distributions no longer ship. They return with the move to Tauri 2.
-- Keyboard shortcuts use Ctrl on every platform, including macOS.
 
 ## Documentation
 
@@ -295,6 +295,8 @@ guided onboarding, a protection overview and background capture, are written up 
 [design specs](docs/design/recovery-evolution/README.md). They are proposals, not commitments.
 
 ## Contributing
+
+Questions and feature requests: [Discord](https://seveneves.ai/discord/?from=bitgit-readme). Bugs: [open an issue](https://github.com/sevenevesai/bitgit/issues/new).
 
 Bug reports, feature requests and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md)
 first, run the build and tests above before opening a pull request, and keep the
