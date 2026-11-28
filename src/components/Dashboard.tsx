@@ -14,7 +14,9 @@ import { attentionRank } from './git/gitStatusView';
 import { SavedViews } from './SavedViews';
 import type { BoardFilters, SavedView, SortOrder } from '../lib/boardViews';
 import type { BulkProjectResult, PublishAction } from '../types';
-import { Plus, RefreshCw, Settings, Sun, Moon, CheckSquare, Square, Upload, Search, Filter, BarChart3, FolderGit2 } from 'lucide-react';
+import { Plus, RefreshCw, Settings, Sun, Moon, CheckSquare, Square, Upload, Search, Filter, BarChart3, FolderGit2, Keyboard } from 'lucide-react';
+import { ShortcutsModal } from './ShortcutsModal';
+import { isHelpShortcut } from '../lib/shortcuts';
 
 // Shortcuts take Ctrl everywhere and also ⌘ on macOS, where hints show ⌘.
 const IS_MAC = navigator.userAgent.includes('Mac');
@@ -231,12 +233,22 @@ export function Dashboard() {
   shownIdsRef.current = filteredProjects.map((project) => project.id);
   const selectShown = useCallback(() => selectAll(shownIdsRef.current), [selectAll]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (listed for the help panel in lib/shortcuts.ts)
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const closeShortcuts = useCallback(() => setIsShortcutsOpen(false), []);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // The help panel handles its own Escape and outside clicks.
+      if (isShortcutsOpen) return;
       // Check if user is typing in an input field
       const target = e.target as HTMLElement;
       const isInputField = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+
+      if (isHelpShortcut(e, isInputField || target.isContentEditable)) {
+        e.preventDefault();
+        setIsShortcutsOpen(true);
+        return;
+      }
 
       const modKey = e.ctrlKey || (IS_MAC && e.metaKey);
 
@@ -285,7 +297,7 @@ export function Dashboard() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleRefreshAll, hasSelection, selectShown, clearSelection, toggleTheme, currentView]);
+  }, [handleRefreshAll, hasSelection, selectShown, clearSelection, toggleTheme, currentView, isShortcutsOpen]);
 
   // The dock rises above the automatic-save problem summary, which sits at the bottom left.
   const automationNeedsAttention = useAutomationProblems().length > 0;
@@ -391,6 +403,14 @@ export function Dashboard() {
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsShortcutsOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                title="Keyboard shortcuts (?)"
+                aria-label="Keyboard shortcuts"
+              >
+                <Keyboard className="w-4 h-4" />
+              </button>
               <button
                 onClick={toggleTheme}
                 className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -611,6 +631,8 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      <ShortcutsModal open={isShortcutsOpen} isMac={IS_MAC} onClose={closeShortcuts} />
 
       <SettingsModal
         isOpen={isSettingsOpen}
