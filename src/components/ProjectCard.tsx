@@ -36,6 +36,7 @@ import {
   ChevronUp,
   Star,
   Terminal,
+  Copy,
   Archive,
   Edit2,
   Save,
@@ -363,6 +364,16 @@ export function ProjectCard({ project, labelCatalog = [] }: ProjectCardProps) {
       await invoke('open_in_terminal', { projectId: project.id });
     } catch (error) {
       toast.error(`Failed to open a terminal: ${errorText(error)}`);
+    }
+  };
+
+  const handleCopyPath = async () => {
+    if (!project.localPath) return;
+    try {
+      await navigator.clipboard.writeText(project.localPath);
+      toast.success('Folder path copied');
+    } catch (error) {
+      toast.error(`Could not copy the folder path: ${errorText(error)}`);
     }
   };
 
@@ -800,6 +811,17 @@ export function ProjectCard({ project, labelCatalog = [] }: ProjectCardProps) {
               title="Open a terminal in this project's folder"
             >
               <Terminal className="w-4 h-4" />
+            </button>
+          )}
+
+          {project.localPath && (
+            <button
+              onClick={() => void handleCopyPath()}
+              aria-label="Copy folder path"
+              className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              title={`Copy this project's folder path: ${project.localPath}`}
+            >
+              <Copy className="w-4 h-4" />
             </button>
           )}
 
