@@ -30,6 +30,30 @@ export const BOARD_STATUSES = [
   'not_configured',
 ] as const;
 
+/** Menu labels for each status filter value, in menu order. */
+export const BOARD_STATUS_LABELS: Record<(typeof BOARD_STATUSES)[number], string> = {
+  all: 'All Status',
+  synced: 'Synced',
+  needs_push: 'Needs Push',
+  needs_merge: 'Needs Merge',
+  needs_sync: 'Needs Sync',
+  ready: 'Ready',
+  github_only: 'GitHub Only',
+  local_only: 'Local Only',
+  not_configured: 'Not Configured',
+};
+
+/** How many projects each status option would show; `all` is the total. */
+export function statusCounts(projects: { projectStatus?: string | null }[]): Record<string, number> {
+  const counts: Record<string, number> = Object.fromEntries(BOARD_STATUSES.map((status) => [status, 0]));
+  for (const project of projects) {
+    counts.all += 1;
+    const status = project.projectStatus;
+    if (status && status !== 'all' && Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
+  }
+  return counts;
+}
+
 const STORAGE_KEY = 'bitgit.boardView.v1';
 const MAX_SAVED_LABELS = 50;
 

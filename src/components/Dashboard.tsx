@@ -8,7 +8,7 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { BulkResultPanel } from './git/BulkResultPanel';
 import { LabelFilter } from './LabelFilter';
 import { labelCatalog, sameLabel } from '../lib/labels';
-import { DEFAULT_BOARD_VIEW, isDefaultBoardView, loadBoardView, saveBoardView } from '../lib/boardView';
+import { BOARD_STATUS_LABELS, BOARD_STATUSES, DEFAULT_BOARD_VIEW, isDefaultBoardView, loadBoardView, saveBoardView, statusCounts } from '../lib/boardView';
 import { useAutomationProblems } from '../lib/recovery-automation';
 import { attentionRank } from './git/gitStatusView';
 import { SavedViews } from './SavedViews';
@@ -106,8 +106,8 @@ export function Dashboard() {
   // Filter and sort projects
   const query = searchQuery.toLowerCase();
   const now = Date.now();
-  const filteredProjects = projects
-    .filter((project) => {
+  // Every filter except status, so the status menu can show how many projects each option leaves.
+  const matchesOtherFilters = (project: (typeof projects)[number]) => {
       // Search filter
       const matchesSearch = project.name.toLowerCase().includes(query) ||
                            project.localPath?.toLowerCase().includes(query) ||
@@ -119,17 +119,18 @@ export function Dashboard() {
       const matchesLabels = selectedLabels.length === 0 ||
                            (project.labels ?? []).some((label) => selectedLabels.some((picked) => sameLabel(picked, label)));
 
-      // Status filter
-      const matchesStatus = statusFilter === 'all' || project.projectStatus === statusFilter;
-
       // Archive filter
       const matchesArchive = showArchived || !project.archived;
 
       // Favorites filter
       const matchesFavorites = !favoritesOnly || project.favorite;
 
-      return matchesSearch && matchesLabels && matchesStatus && matchesArchive && matchesFavorites;
-    })
+      return matchesSearch && matchesLabels && matchesArchive && matchesFavorites;
+  };
+  const otherwiseShown = projects.filter(matchesOtherFilters);
+  const countsByStatus = statusCounts(otherwiseShown);
+  const filteredProjects = otherwiseShown
+    .filter((project) => statusFilter === 'all' || project.projectStatus === statusFilter)
     .sort((a, b) => {
       if (sortBy === 'attention') {
         const order = attentionRank(a, now) - attentionRank(b, now);
@@ -454,15 +455,11 @@ export function Dashboard() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none cursor-pointer min-w-[180px]"
               >
-                <option value="all">All Status</option>
-                <option value="synced">Synced</option>
-                <option value="needs_push">Needs Push</option>
-                <option value="needs_merge">Needs Merge</option>
-                <option value="needs_sync">Needs Sync</option>
-                <option value="ready">Ready</option>
-                <option value="github_only">GitHub Only</option>
-                <option value="local_only">Local Only</option>
-                <option value="not_configured">Not Configured</option>
+                {BOARD_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {BOARD_STATUS_LABELS[status]} ({countsByStatus[status] ?? 0})
+                  </option>
+                ))}
               </select>
             </div>
 
