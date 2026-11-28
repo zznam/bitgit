@@ -10,7 +10,7 @@ import { LabelFilter } from './LabelFilter';
 import { labelCatalog, sameLabel } from '../lib/labels';
 import { BOARD_STATUS_LABELS, BOARD_STATUSES, DEFAULT_BOARD_VIEW, isDefaultBoardView, loadBoardView, saveBoardView, statusCounts } from '../lib/boardView';
 import { useAutomationProblems } from '../lib/recovery-automation';
-import { attentionRank } from './git/gitStatusView';
+import { attentionRank, formatRelativeTime } from './git/gitStatusView';
 import { SavedViews } from './SavedViews';
 import type { BoardFilters, SavedView, SortOrder } from '../lib/boardViews';
 import type { BulkProjectResult, PublishAction } from '../types';
@@ -159,12 +159,22 @@ export function Dashboard() {
 
   // Re-reads Git state (and GitHub) for every project with a local folder. It does not reload the
   // list, so open dialogs on the cards are not torn down.
+  // When "Refresh all" last finished checking at least one project; shown beside the count.
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const [, setClock] = useState(0);
+  useEffect(() => {
+    if (!lastRefreshedAt) return;
+    const timer = window.setInterval(() => setClock((tick) => tick + 1), 30_000);
+    return () => window.clearInterval(timer);
+  }, [lastRefreshedAt]);
+
   const handleRefreshAll = useCallback(async () => {
     if (isRefreshingRef.current) return;
     isRefreshingRef.current = true;
     setIsRefreshing(true);
     try {
       const summary = await refreshAllProjects();
+      if (summary.checked > 0) setLastRefreshedAt(new Date().toISOString());
       const problems = summary.unavailable + summary.failed;
       const skippedNote = summary.skipped > 0 ? ` ${summary.skipped} skipped because an operation is running.` : '';
       if (summary.checked === 0) {
@@ -369,7 +379,7 @@ export function Dashboard() {
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">BitGit</h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {currentView === 'projects'
-                    ? `${filteredProjects.length} of ${projects.length} projects`
+                    ? `${filteredProjects.length} of ${projects.length} projects${lastRefreshedAt ? ` · refreshed ${formatRelativeTime(lastRefreshedAt)}` : ''}`
                     : 'Insights & Analytics'
                   }
                 </p>
